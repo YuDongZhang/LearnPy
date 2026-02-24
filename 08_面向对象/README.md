@@ -41,20 +41,21 @@ p.say_hello()
 
 | 特性 | 说明 |
 |------|------|
-| **封装** | 隐藏内部实现细节 |
-| **继承** | 子类继承父类的属性和方法 |
+| **封装** | 隐藏内部实现细节，通过访问控制保护数据 |
+| **继承** | 子类继承父类的属性和方法，实现代码复用 |
 | **多态** | 同一方法在不同对象有不同表现 |
 
 ---
 
 ## 4. 示例文件
 
-- `basic_class.py` - 类的基础
-- `init_and_self.py` - 构造方法和 self
-- `inheritance.py` - 继承
-- `encapsulation.py` - 封装
-- `polymorphism.py` - 多态
-- `special_methods.py` - 特殊方法
+| 文件 | 内容 |
+|------|------|
+| `basic_class.py` | 类的基础：定义类、属性、方法、类方法、静态方法 |
+| `inheritance.py` | 继承：单继承、多重继承、super()、MRO |
+| `encapsulation.py` | 封装：访问控制、@property、__slots__ |
+| `polymorphism.py` | 多态：鸭子类型、运算符重载、抽象基类 |
+| `special_methods.py` | 魔术方法：__str__、__eq__、运算符重载、上下文管理器 |
 
 ---
 
