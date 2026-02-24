@@ -5,6 +5,7 @@
 - 掌握类和对象的定义
 - 理解继承、封装、多态
 - 掌握特殊方法（魔术方法）
+- 了解 dataclass 和组合设计原则
 
 ---
 
@@ -27,7 +28,7 @@ class Person:
     def __init__(self, name, age):
         self.name = name
         self.age = age
-    
+
     def say_hello(self):
         print(f"你好，我是{self.name}")
 
@@ -56,6 +57,17 @@ p.say_hello()
 | `encapsulation.py` | 封装：访问控制、@property、__slots__ |
 | `polymorphism.py` | 多态：鸭子类型、运算符重载、抽象基类 |
 | `special_methods.py` | 魔术方法：__str__、__eq__、运算符重载、上下文管理器 |
+| `dataclass_demo.py` | 数据类：简化数据存储类定义，自动生成方法 |
+| `composition.py` | 组合 vs 继承：面向对象设计原则 |
+
+---
+
+## 5. 章节总结
+
+- **基础**：类与对象、属性与方法
+- **特性**：封装、继承、多态
+- **进阶**：魔术方法、数据类
+- **设计**：组合优于继承的设计原则
 
 ---
 
