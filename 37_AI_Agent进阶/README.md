@@ -20,6 +20,7 @@
 | `agent_workflow.py` | Agent工作流 |
 | `langgraph_intro.py` | LangGraph入门 |
 | `autogen_intro.py` | AutoGen框架 |
+| `agent_evaluation.py` | Agent评估与测试 |
 | `agent_project.py` | Agent进阶实战 |
 
 ## 学习路径
@@ -29,7 +30,8 @@
 3. Agent工作流
 4. LangGraph框架
 5. AutoGen框架
-6. 实战项目
+6. Agent评估与测试
+7. 实战项目
 
 ## 前置知识
 
