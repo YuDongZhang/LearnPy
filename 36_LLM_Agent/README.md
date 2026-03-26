@@ -2,47 +2,40 @@
 
 ## 本章目标
 
-- 理解LLM Agent的基本概念
-- 掌握Agent的核心组件
-- 学会使用LangChain Agent
-- 掌握Tool工具的使用方法
-- 动手实践Agent项目
+- 理解LLM Agent的基本概念和发展历程
+- 掌握Agent的核心架构与组件
+- 学会定义和使用Agent工具
+- 使用LangChain构建Agent
+- 动手完成Agent实战项目
 
-## Agent简介
+## 章节目录
 
-LLM Agent是结合大语言模型与外部工具、记忆的系统，能够自主规划和执行复杂任务。Agent是AI应用的重要方向，可以完成从问答到复杂任务自动化的各种工作。
-
-## 示例文件
-
-| 文件 | 内容 |
-|------|------|
-| `agent_overview.py` | Agent概述与发展 |
-| `agent_architecture.py` | Agent架构设计 |
-| `langchain_agent.py` | LangChain Agent使用 |
-| `agent_tools.py` | Agent工具系统 |
-| `agent_project.py` | Agent实战项目 |
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_agent_overview.md | 1_agent_overview.py | Agent概述与核心概念 |
+| 2 | 2_agent_architecture.md | 2_agent_architecture.py | Agent架构与组件设计 |
+| 3 | 3_agent_tools.md | 3_agent_tools.py | 工具系统详解 |
+| 4 | 4_langchain_agent.md | 4_langchain_agent.py | LangChain Agent实践 |
+| 5 | 5_agent_project.md | 5_agent_project.py | Agent实战项目 |
 
 ## 学习路径
 
-1. Agent基础概念
-2. Agent核心组件
-3. ReAct模式
-4. LangChain Agent
-5. 工具系统
-6. 记忆系统
-7. 实战项目
+1. 先读 md 了解概念，再看对应 py 代码
+2. 建议按编号顺序学习
+3. 第5节为综合实战，建议前4节学完再看
 
 ## 前置知识
 
 - Python基础
-- 生成式AI与LLM (第35章)
+- 生成式AI与LLM（第35章）
+
+## 安装依赖
+
+```bash
+pip install langchain langchain-openai langchain-community
+pip install duckduckgo-search
+```
 
 ## 章节导航
 
-[第三十五章：生成式AI与大语言模型](../35_生成式AI与LLM/README.md)
-
-## 参考资源
-
-- 论文：ReAct: Synergizing Reasoning and Acting in Language Models
-- 文档：LangChain Agent文档
-- 项目：LangChain, AutoGPT, BabyAGI
+[上一章：生成式AI与大语言模型](../35_生成式AI与LLM/README.md) | [下一章：AI Agent进阶](../37_AI_Agent进阶/README.md)
