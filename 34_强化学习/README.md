@@ -8,28 +8,15 @@
 - 理解 Policy Gradient 方法
 - 动手实践强化学习项目
 
-## 强化学习简介
+## 章节目录
 
-强化学习 (Reinforcement Learning, RL) 是机器学习的一个重要分支，智能体通过与环境交互学习最优策略。
-
-## 示例文件
-
-| 文件 | 内容 |
-|------|------|
-| `rl_overview.py` | RL 概述与发展历程 |
-| `q_learning.py` | Q-Learning 算法 |
-| `dqn_deep_rl.py` | DQN 深度强化学习 |
-| `policy_gradient.py` | Policy Gradient 方法 |
-| `rl_project.py` | RL 实战：游戏 AI |
-
-## 学习路径
-
-1. 强化学习基础概念
-2. 马尔可夫决策过程
-3. Q-Learning / SARSA
-4. DQN 及改进算法
-5. Policy Gradient / Actor-Critic
-6. 实战项目
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_rl_overview.md | 1_rl_overview.py | 强化学习概述与发展历程 |
+| 2 | 2_q_learning.md | 2_q_learning.py | Q-Learning 算法 |
+| 3 | 3_dqn_deep_rl.md | 3_dqn_deep_rl.py | DQN 深度强化学习 |
+| 4 | 4_policy_gradient.md | 4_policy_gradient.py | Policy Gradient 方法 |
+| 5 | 5_rl_project.md | 5_rl_project.py | RL 实战：游戏 AI |
 
 ## 前置知识
 

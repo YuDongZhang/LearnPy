@@ -9,30 +9,16 @@
 - 了解RAG知识库构建
 - 动手实践LLM项目
 
-## 生成式AI简介
+## 章节目录
 
-生成式AI (Generative AI) 是人工智能的一个重要分支，能够创建新的内容，如文本、图像、音频、视频等。近年来，随着大语言模型(LLM)的快速发展，生成式AI在各个领域展现出强大的能力。
-
-## 示例文件
-
-| 文件 | 内容 |
-|------|------|
-| `generative_ai_overview.py` | 生成式AI概述与发展历程 |
-| `llm_fundamentals.py` | 大语言模型基础与原理 |
-| `prompt_engineering.py` | Prompt工程技巧 |
-| `llm_api_usage.py` | LLM API使用指南 |
-| `rag_knowledge_base.py` | RAG知识库构建 |
-| `llm_project.py` | LLM实战项目 |
-
-## 学习路径
-
-1. 生成式AI基础概念
-2. 大语言模型发展历程
-3. Transformer架构
-4. Prompt工程
-5. LLM API调用
-6. RAG检索增强生成
-7. 实战项目
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_generative_ai_overview.md | 1_generative_ai_overview.py | 生成式AI概述与发展历程 |
+| 2 | 2_llm_fundamentals.md | 2_llm_fundamentals.py | 大语言模型基础与原理 |
+| 3 | 3_prompt_engineering.md | 3_prompt_engineering.py | Prompt工程技巧 |
+| 4 | 4_llm_api_usage.md | 4_llm_api_usage.py | LLM API使用指南 |
+| 5 | 5_rag_knowledge_base.md | 5_rag_knowledge_base.py | RAG知识库构建 |
+| 6 | 6_llm_project.md | 6_llm_project.py | LLM实战项目 |
 
 ## 前置知识
 

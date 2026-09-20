@@ -8,20 +8,16 @@
 - 理解 Transformer 架构
 - 掌握 BERT、GPT 等预训练模型的使用
 
-## NLP 简介
+## 章节目录
 
-自然语言处理 (Natural Language Processing, NLP) 是人工智能与语言学的交叉学科，研究如何让计算机理解和生成人类语言。
-
-## 示例文件
-
-| 文件 | 内容 |
-|------|------|
-| `nlp_overview.py` | NLP 概述与发展历程 |
-| `text_preprocessing.py` | 文本预处理技术 |
-| `rnn_text_classification.py` | RNN/LSTM 文本分类 |
-| `transformer_intro.py` | Transformer 原理详解 |
-| `bert_gpt_usage.py` | BERT/GPT 使用指南 |
-| `nlp_project.py` | NLP 实战：情感分析 |
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_nlp_overview.md | 1_nlp_overview.py | NLP 概述与发展历程 |
+| 2 | 2_text_preprocessing.md | 2_text_preprocessing.py | 文本预处理技术 |
+| 3 | 3_rnn_text_classification.md | 3_rnn_text_classification.py | RNN/LSTM 文本分类 |
+| 4 | 4_transformer_intro.md | 4_transformer_intro.py | Transformer 原理详解 |
+| 5 | 5_bert_gpt_usage.md | 5_bert_gpt_usage.py | BERT/GPT 使用指南 |
+| 6 | 6_nlp_project.md | 6_nlp_project.py | NLP 实战：情感分析 |
 
 ## 学习路径
 

@@ -8,20 +8,16 @@
 - 理解目标检测算法
 - 掌握 GAN 生成对抗网络
 
-## 计算机视觉简介
+## 章节目录
 
-计算机视觉 (Computer Vision) 是人工智能的重要分支，让计算机理解和处理图像/视频。
-
-## 示例文件
-
-| 文件 | 内容 |
-|------|------|
-| `cv_overview.py` | CV 概述与发展历程 |
-| `image_processing.py` | 图像处理基础 |
-| `cnn_image_classification.py` | CNN 图像分类 |
-| `object_detection.py` | 目标检测算法 |
-| `gan_introduction.py` | GAN 生成对抗网络 |
-| `cv_project.py` | CV 实战：图像分类项目 |
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_cv_overview.md | 1_cv_overview.py | CV 概述与发展历程 |
+| 2 | 2_image_processing.md | 2_image_processing.py | 图像处理基础 |
+| 3 | 3_cnn_image_classification.md | 3_cnn_image_classification.py | CNN 图像分类 |
+| 4 | 4_object_detection.md | 4_object_detection.py | 目标检测算法 |
+| 5 | 5_gan_introduction.md | 5_gan_introduction.py | GAN 生成对抗网络 |
+| 6 | 6_cv_project.md | 6_cv_project.py | CV 实战：图像分类项目 |
 
 ## 学习路径
 
