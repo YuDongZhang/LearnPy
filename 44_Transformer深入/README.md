@@ -8,6 +8,11 @@
 - 理解KV Cache推理优化
 - 从零搭建一个mini Transformer
 - 了解主流LLM架构差异
+- 掌握GQA与MLA注意力（2025-2026主流）
+- 理解MoE混合专家与负载均衡
+- 了解SWA、Flash Attention等高效注意力
+- 了解长上下文外推（YaRN）与Mamba/SSM混合架构
+- 理解投机解码与多Token预测（MTP）
 
 ## 章节目录
 
@@ -19,6 +24,11 @@
 | 4 | 4_kv_cache.md | 4_kv_cache.py | KV Cache推理优化 |
 | 5 | 5_mini_transformer.md | 5_mini_transformer.py | 从零搭建mini GPT |
 | 6 | 6_llm_architectures.md | 6_llm_architectures.py | 主流LLM架构对比 |
+| 7 | 7_gqa_and_mla.md | 7_gqa_and_mla.py | GQA与MLA注意力 |
+| 8 | 8_moe.md | 8_moe.py | MoE混合专家 |
+| 9 | 9_efficient_attention.md | 9_efficient_attention.py | 高效注意力(SWA/Flash Attention) |
+| 10 | 10_hybrid_ssm.md | 10_hybrid_ssm.py | 混合架构(Mamba/SSM) |
+| 11 | 11_speculative_decoding.md | 11_speculative_decoding.py | 投机解码与MTP |
 
 ## 前置知识
 

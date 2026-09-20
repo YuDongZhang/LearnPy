@@ -35,10 +35,10 @@ class AttentionWithKVCache(nn.Module):
 
         # Attention
         scores = (Q @ K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        # 偏移因果mask: 查询i的绝对位置是 seq_len-T+i, 只能看到自身及之前
+        # T=1解码 → 全可见; 无cache(T=seq_len) → 退化为普通因果tril
         seq_len = K.size(2)
-        mask = torch.tril(torch.ones(T, seq_len, device=x.device))
-        if T == 1:  # 生成阶段，只有最后一行
-            mask = torch.ones(1, seq_len, device=x.device)
+        mask = torch.ones(T, seq_len, device=x.device).tril(diagonal=seq_len - T)
         scores = scores.masked_fill(mask == 0, float('-inf'))
         attn = F.softmax(scores, dim=-1)
         out = (attn @ V).transpose(1, 2).contiguous().view(B, T, C)
@@ -55,30 +55,36 @@ def demo_kv_cache():
 
     gen_len = 50
 
-    # 方式1: 无KV Cache（每次重新计算全部）
+    # 正确性验证: prefill 5个 + 带cache一次喂7个 vs 一次算完12个
+    # (带cache喂多token时mask要按 seq_len-T 偏移, 否则这里对不上)
+    tokens = torch.randn(1, 12, d_model)
+    with torch.no_grad():
+        out_full, _ = attn(tokens)
+        out_a, cache = attn(tokens[:, :5])
+        out_b, cache = attn(tokens[:, 5:], kv_cache=cache)
+    err = (out_full - torch.cat([out_a, out_b], dim=1)).abs().max().item()
+    print(f"分段前递(prefill+增量) vs 一次前向: 最大误差 {err:.2e} (应≈0)\n")
+
+    # 速度对比: 两个分支吃同一份输入才公平 (CPU小张量噪声大, 只看量级)
+    tokens = torch.randn(1, gen_len, d_model)
+
     start = time.time()
-    tokens = torch.randn(1, 1, d_model)
-    for i in range(gen_len):
-        full_input = torch.randn(1, i + 1, d_model)
-        with torch.no_grad():
-            out, _ = attn(full_input)
+    with torch.no_grad():
+        for i in range(gen_len):
+            out, _ = attn(tokens[:, :i + 1])        # 每步重算全部历史
     time_no_cache = time.time() - start
 
-    # 方式2: 有KV Cache（只计算新token）
     start = time.time()
-    first_token = torch.randn(1, 1, d_model)
     with torch.no_grad():
-        out, cache = attn(first_token)
-    for i in range(gen_len - 1):
-        new_token = torch.randn(1, 1, d_model)
-        with torch.no_grad():
-            out, cache = attn(new_token, kv_cache=cache)
+        out, cache = attn(tokens[:, :1])
+        for i in range(1, gen_len):
+            out, cache = attn(tokens[:, i:i + 1], kv_cache=cache)  # 只算新token
     time_with_cache = time.time() - start
 
     print(f"生成 {gen_len} tokens:")
     print(f"  无KV Cache: {time_no_cache:.4f}s")
     print(f"  有KV Cache: {time_with_cache:.4f}s")
-    print(f"  加速比: {time_no_cache / time_with_cache:.1f}x")
+    print(f"  加速比: {time_no_cache / time_with_cache:.1f}x (CPU仅供参考, GPU上差距更大)")
     print(f"  KV Cache大小: K={cache[0].shape}, V={cache[1].shape}")
 
 
