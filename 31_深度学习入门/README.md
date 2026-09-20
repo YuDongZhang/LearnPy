@@ -11,15 +11,15 @@
 
 深度学习 (Deep Learning) 是机器学习的一个分支，使用多层神经网络来学习数据的表征。
 
-## 示例文件
+## 章节目录
 
-| 文件 | 内容 |
-|------|------|
-| `dl_overview.py` | 深度学习概述与环境准备 |
-| `neural_network.py` | 神经网络基础与原理 |
-| `tensorflow_demo.py` | TensorFlow 框架示例 |
-| `pytorch_demo.py` | PyTorch 框架示例 |
-| `cnn_image_classification.py` | CNN 图像分类实战 |
+| 编号 | 讲解(md) | 代码(py) | 内容 |
+|------|----------|----------|------|
+| 1 | 1_dl_overview.md | 1_dl_overview.py | 深度学习概述与环境准备 |
+| 2 | 2_neural_network.md | 2_neural_network.py | 神经网络基础与原理 |
+| 3 | 3_tensorflow_demo.md | 3_tensorflow_demo.py | TensorFlow 框架示例 |
+| 4 | 4_pytorch_demo.md | 4_pytorch_demo.py | PyTorch 框架示例 |
+| 5 | 5_cnn_image_classification.md | 5_cnn_image_classification.py | CNN 图像分类实战 |
 
 ## 学习路径
 
@@ -43,4 +43,4 @@
 
 ## 章节导航
 
-[第三十章：人工智能入门](../30_人工智能入门/README.md) | [第三十二章：自然语言处理](../32_自然语言处理/README.md)
+[上一章：第三十章 人工智能入门](../30_人工智能入门/README.md) | [下一章：第三十二章 自然语言处理](../32_自然语言处理/README.md)
