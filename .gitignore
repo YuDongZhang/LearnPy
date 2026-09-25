@@ -1,0 +1,11 @@
+# 机密配置，禁止提交
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# 示例代码运行产物
+chroma_db/
+rag_db/
+sample.txt

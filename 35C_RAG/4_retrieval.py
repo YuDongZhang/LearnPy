@@ -3,9 +3,29 @@
 演示不同的检索方式：相似度、MMR、带分数过滤。
 """
 
-from langchain_openai import OpenAIEmbeddings
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 本机装了 TensorFlow，transformers 导入时会去探测它、并因 Keras 3 版本冲突报错。
+# 这里只用 PyTorch 后端，所以在 import transformers 之前显式关掉 TF 探测。
+os.environ.setdefault("USE_TF", "0")
+
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
+
+
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+
+
+def get_embeddings():
+    """本地中文 Embedding 模型（512维），首次运行会自动下载约 100MB"""
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
 
 
 def build_db():
@@ -16,9 +36,9 @@ def build_db():
         Document(page_content="Python的asyncio提供了异步编程支持，适合高并发IO操作。"),
         Document(page_content="Python的装饰器是修改函数行为的语法糖，使用@符号。"),
         Document(page_content="Python的生成器使用yield关键字，惰性产生值，节省内存。"),
-        Document(page_content="multiprocessing模块可以绑过GIL限制，实现真正的并行计算。"),
+        Document(page_content="multiprocessing模块可以绕过GIL限制，实现真正的并行计算。"),
     ]
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = get_embeddings()
     return Chroma.from_documents(docs, embeddings)
 
 

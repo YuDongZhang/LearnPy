@@ -5,7 +5,16 @@
 
 import os
 import sys
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 本机装了 TensorFlow，transformers 导入时会去探测它、并因 Keras 3 版本冲突报错。
+# 这里只用 PyTorch 后端，所以在 import transformers 之前显式关掉 TF 探测。
+os.environ.setdefault("USE_TF", "0")
+
+from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import (
     TextLoader, DirectoryLoader, UnstructuredMarkdownLoader,
@@ -17,8 +26,16 @@ from langchain_core.runnables import RunnablePassthrough
 
 
 PERSIST_DIR = "./rag_db"
-EMBEDDING_MODEL = "text-embedding-3-small"
-LLM_MODEL = "gpt-4o"
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+LLM_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+
+def get_embeddings():
+    """本地中文 Embedding 模型（512维），首次运行会自动下载约 100MB"""
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
 
 
 # ============================================================
@@ -56,7 +73,7 @@ def build_index(docs_dir: str):
     print(f"切分为 {len(chunks)} 个块")
 
     # 向量化并持久化
-    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+    embeddings = get_embeddings()
     db = Chroma.from_documents(chunks, embeddings, persist_directory=PERSIST_DIR)
     print(f"索引已保存到 {PERSIST_DIR}")
 
@@ -66,7 +83,7 @@ def build_index(docs_dir: str):
 # ============================================================
 def chat():
     """交互式RAG问答"""
-    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+    embeddings = get_embeddings()
     db = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings)
     retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 3})
     llm = ChatOpenAI(model=LLM_MODEL, temperature=0)

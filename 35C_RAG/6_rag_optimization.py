@@ -3,24 +3,53 @@
 演示查询改写、多查询检索、上下文压缩等优化技巧。
 """
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 本机装了 TensorFlow，transformers 导入时会去探测它、并因 Keras 3 版本冲突报错。
+# 这里只用 PyTorch 后端，所以在 import transformers 之前显式关掉 TF 探测。
+os.environ.setdefault("USE_TF", "0")
+
+from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document, StrOutputParser
 
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+LLM_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+
+
+def get_embeddings():
+    """本地中文 Embedding 模型（512维），首次运行会自动下载约 100MB"""
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
+
+
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
+
+
+_DB = None
 
 
 def build_db():
-    docs = [
-        Document(page_content="Python的GIL限制多线程并行，CPU密集型任务用multiprocessing。"),
-        Document(page_content="asyncio是Python的异步编程库，使用async/await语法。"),
-        Document(page_content="threading模块适合IO密集型任务，线程在等待IO时释放GIL。"),
-        Document(page_content="concurrent.futures提供线程池和进程池的高级接口。"),
-        Document(page_content="装饰器是修改函数行为的语法糖，用@符号应用。"),
-    ]
-    return Chroma.from_documents(docs, OpenAIEmbeddings(model="text-embedding-3-small"))
+    """构建测试向量数据库（进程内只构建一次，原因见 5_rag_chain.py 的注释）"""
+    global _DB
+    if _DB is None:
+        docs = [
+            Document(page_content="Python的GIL限制多线程并行，CPU密集型任务用multiprocessing。"),
+            Document(page_content="asyncio是Python的异步编程库，使用async/await语法。"),
+            Document(page_content="threading模块适合IO密集型任务，线程在等待IO时释放GIL。"),
+            Document(page_content="concurrent.futures提供线程池和进程池的高级接口。"),
+            Document(page_content="装饰器是修改函数行为的语法糖，用@符号应用。"),
+        ]
+        _DB = Chroma.from_documents(docs, get_embeddings())
+    return _DB
 
 
 # ============================================================

@@ -3,10 +3,32 @@
 用最少代码演示RAG的完整流程：加载→切分→向量化→检索→生成。
 """
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 本机装了 TensorFlow，transformers 导入时会去探测它、并因 Keras 3 版本冲突报错。
+# 这里只用 PyTorch 后端，所以在 import transformers 之前显式关掉 TF 探测。
+os.environ.setdefault("USE_TF", "0")
+
+from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+
+
+LLM_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+
+
+def get_embeddings():
+    """本地中文 Embedding 模型（512维），首次运行会自动下载约 100MB"""
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
 
 
 # ============================================================
@@ -30,7 +52,7 @@ def demo_minimal_rag():
     print(f"文档数: {len(docs)} → 切分后: {len(chunks)} 块")
 
     # 3. 向量化 + 存入Chroma
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = get_embeddings()
     vectorstore = Chroma.from_documents(chunks, embeddings)
     print("向量数据库构建完成")
 
@@ -43,7 +65,7 @@ def demo_minimal_rag():
         print(f"  [{i+1}] {doc.page_content[:80]}...")
 
     # 5. 生成回答
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model=LLM_MODEL, temperature=0)
     context = "\n".join([doc.page_content for doc in results])
     prompt = f"基于以下资料回答问题。如果资料中没有相关信息，请说'不确定'。\n\n资料:\n{context}\n\n问题: {query}"
 

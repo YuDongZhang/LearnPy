@@ -3,9 +3,29 @@
 演示Embedding生成和Chroma/FAISS的使用。
 """
 
-from langchain_openai import OpenAIEmbeddings
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 本机装了 TensorFlow，transformers 导入时会去探测它、并因 Keras 3 版本冲突报错。
+# 这里只用 PyTorch 后端，所以在 import transformers 之前显式关掉 TF 探测。
+os.environ.setdefault("USE_TF", "0")
+
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
+
+
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+
+
+def get_embeddings():
+    """本地中文 Embedding 模型（512维），首次运行会自动下载约 100MB"""
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
 
 
 # ============================================================
@@ -13,7 +33,7 @@ from langchain.schema import Document
 # ============================================================
 def demo_embedding():
     """生成Embedding并计算相似度"""
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = get_embeddings()
 
     texts = ["Python是编程语言", "Java是编程语言", "今天天气很好"]
     vectors = embeddings.embed_documents(texts)
@@ -41,7 +61,7 @@ def demo_chroma():
         Document(page_content="PyTorch用于深度学习", metadata={"source": "ai.md"}),
     ]
 
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = get_embeddings()
 
     # 内存模式
     db = Chroma.from_documents(docs, embeddings)
@@ -65,7 +85,7 @@ def demo_chroma():
 def demo_chroma_persist():
     """Chroma持久化到磁盘"""
     docs = [Document(page_content="测试文档", metadata={"source": "test"})]
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = get_embeddings()
 
     # 保存到磁盘
     db = Chroma.from_documents(docs, embeddings, persist_directory="./chroma_db")
