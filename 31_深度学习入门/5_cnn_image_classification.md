@@ -1,218 +1,710 @@
-# 5. CNN图像分类实战
+# 5. CNN 图像分类实战
 
-## CNN简介
+> 上一篇里，处理 8×8 图片的做法是 `torch.flatten` 把它摊平成 64 维向量喂给全连接层。
+> 这一篇要回答：**为什么这样不行？卷积到底是怎么把"空间结构"用起来的？**
+>
+> 文中的输出都是 `5_cnn_image_classification.py` 的真实运行结果。
 
-卷积神经网络 (Convolutional Neural Network, CNN) 的核心思想：
+---
 
-- **局部连接**：每个神经元只连接局部区域
-- **权值共享**：同一层的神经元共享权重
-- **池化**：降低空间尺寸，减少参数
+## 1. 先看全连接处理图像的两个致命问题
 
-CNN 主要组成：
+### 问题一：参数爆炸
 
-| 层 | 作用 |
-|----|------|
-| 卷积层 (Convolution) | 提取特征 |
-| 池化层 (Pooling) | 降维 |
-| 全连接层 (Fully Connected) | 分类 |
-
-为什么 CNN 适合图像？保留空间结构、参数少训练快、层次化特征提取（浅层学边缘纹理，深层学语义部件）。
-
-## 卷积层
-
-卷积操作：输入 (5x5) × 卷积核 (3x3) → 输出 (3x3)：
+上一篇 PyTorch 的 `CNN` 类里有一行 `nn.Linear(32*2*2, 10)`。假设我们把 8×8 换成一张普通照片 224×224（RGB 三通道），并且第一层就用 1000 个隐藏神经元：
 
 ```
-[1 1 1 0 0]     [1 0 1]       [4 3 4]
-[0 1 1 1 0]  *  [0 1 0]   =   [2 4 3]
-[0 0 1 1 1]     [1 0 1]       [1 2 3]
+输入维度 = 224 × 224 × 3 = 150,528
+第一层参数量 = 150,528 × 1000 + 1000 ≈ 1.5 亿      ← 仅仅第一层
+```
+
+而且**这还只是一层**。如果换成 1024×1024 的图，参数量再涨 20 倍。
+
+### 问题二：空间结构被破坏
+
+摊平这个动作，在数学上只是"换个索引顺序"，但它**丢掉了一件关键信息：像素之间的相邻关系**。
+
+```
+原图（3×3）:              摊平后（9 维）:
+[1  2  3]                [1, 2, 3, 4, 5, 6, 7, 8, 9]
+[4  5  6]      ──►       ↑           ↑
+[7  8  9]              "1" 和 "2" 相邻  "1" 和 "6" 也相邻? 看不出区别
+```
+
+摊平后，**"1 和 2 相邻"与"1 和 6 相邻"在数据上没有任何区别**。而图像的一切特征——边缘、角点、纹理——**本质上都是邻域像素之间的关系**。
+
+举个最直观的例子：一个"竖线"的特征就是"某个像素亮、左右两边暗"。这种模式必须看**相邻像素**才能识别，摊平后就没法表达了。
+
+**CNN 的两个核心思想正好对应解决这两个问题**：
+
+| 问题 | CNN 的答案 | 实现的机制 |
+|---|---|---|
+| 参数爆炸 | 参数**与图片大小无关** | **权值共享**（同一个卷积核滑过整张图） |
+| 空间结构丢失 | 保持二维结构，只看**局部邻域** | **局部连接** |
+
+---
+
+## 2. 卷积：手算一遍滑动过程
+
+代码第 1 节用一个小例子把卷积算穿。**输入是一张 5×5 的图，卷积核 3×3**：
+
+```
+输入 5x5:              卷积核 3x3:
+[1 1 1 0 0]            [1 0 1]
+[0 1 1 1 0]            [0 1 0]
+[0 0 1 1 1]            [1 0 1]
 [0 0 1 1 0]
 [0 1 0 1 0]
 ```
 
-关键参数：
+**真实输出**：
 
-- 卷积核大小：3x3、5x5、7x7
-- 步长 (Stride)：每次移动的距离
-- 填充 (Padding)：边缘补零，控制输出尺寸
-
-## 池化层
-
-- Max Pooling：取最大值（最常用）
-- Average Pooling：取平均值
-- Global Pooling：全局池化
-
-## 经典CNN架构
-
-| 架构 | 年份 | 贡献 |
-|------|------|------|
-| LeNet-5 | 1998 | 第一个 CNN，手写数字识别 |
-| AlexNet | 2012 | ImageNet 突破，引入 ReLU 和 Dropout |
-| VGGNet | 2014 | 统一的 3x3 卷积，VGG16/19 |
-| ResNet | 2015 | 残差连接 y = F(x) + x，训到 152 层 |
-| EfficientNet | 2019 | 平衡深度、宽度、分辨率 |
-
-## 项目：猫狗分类
-
-任务：二分类（猫 vs 狗），数据集 Dogs vs Cats (Kaggle)。
-
-步骤：数据准备 → 数据增强 → 构建模型 → 训练 → 评估 → 预测。
-
-## 数据准备
-
-```python
-from torchvision import datasets, transforms
-
-train_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.RandomHorizontalFlip(),   # 数据增强
-    transforms.RandomRotation(10),
-    transforms.ColorJitter(brightness=0.2),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225])
-])
-
-train_data = datasets.ImageFolder('data/train', transform=train_transform)
-train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+```
+输出 3x3 (无填充, 5-3+1=3):
+[[4 3 4]
+ [2 4 3]
+ [1 4 3]]
 ```
 
-注意：训练集做数据增强，验证集只做 Resize + Normalize。
+### 计算过程
 
-## 构建CNN模型
+卷积核从左上角开始，**每次右移一格，到头了换下一行**。每落一个位置，就把覆盖的 3×3 区域与核**逐元素相乘再求和**：
+
+**位置 (0,0)**——覆盖输入左上角：
+
+```
+输入区域:        卷积核:        逐元素相乘:
+[1 1 1]          [1 0 1]        1×1 + 1×0 + 1×1
+[0 1 1]    ×     [0 1 0]   →  = 1 + 0 + 1
+[0 0 1]          [1 0 1]        + 0×0 + 1×1 + 1×0
+                                + 0×1 + 0×0 + 1×1
+                             =  1+1 + 0+1+0 + 0+0+1
+                             =  4          ✓
+```
+
+**位置 (0,1)**——核右移一格：
+
+```
+输入区域:        计算:
+[1 1 0]          1×1 + 1×0 + 0×1
+[1 1 1]    ×     [0×0 + 1×1 + 1×0]     = 1 + 1 + 0 + 1 + 1 = ... 
+[0 1 1]          [0×1 + 1×0 + 1×1]
+```
+
+逐项展开：`1×1 + 1×0 + 0×1 + 1×0 + 1×1 + 1×0 + 0×1 + 1×0 + 1×1`
+= `1 + 0 + 0` + `0 + 1 + 0` + `0 + 0 + 1` = **3** ✓（对应输出的 (0,1)）
+
+**位置 (2,2)**——最后一步，覆盖右下角：
+
+```
+输入区域:        计算:
+[1 1 1]          1×1 + 1×0 + 1×1
+[1 1 0]    ×     [0×0 + 1×1 + 0×0     = 1+1 +1 + 1+0 = ...
+[0 1 0]          [0×1 + 1×0 + 0×1]
+```
+
+展开：`1+0+1` + `0+1+0` + `0+0+0` = **3** ✓（对应输出的 (2,2)）
+
+9 个位置全部算完，得到完整的 3×3 输出。**这就是"卷积"——一个核滑过整张图，每个位置做一次加权求和。**
+
+### 输出尺寸公式
+
+```
+输出边长 = (输入 - 核 + 1) = 5 - 3 + 1 = 3
+```
+
+这个公式的直觉很简单：核的左上角能放的位置数。核有 3 格宽，要完整落在 5 格里，左上角最远能放到第 `5-3=2` 号位置（0-indexed），所以可放位置是 `0,1,2` 共 **3** 个。
+
+### 这个核在"找"什么
+
+看一眼核的形状：四个角是 1，中间是 1，其他是 0。
+
+```
+[1 0 1]
+[0 1 0]
+[1 0 1]
+```
+
+**它在检测"对角方向的亮点"**。所以输入里那些有对角结构的区域得分高（4），平坦的区域得分低（1）。
+
+**关键在于：核里的数字就是参数，是训练学出来的。** 我们只告诉网络"用 3×3 的核、要 16 个"，具体每个核长什么样，是反向传播自己调出来的。典型结果会是：有的核变成边缘检测器，有的变成纹理检测器。
+
+### 参数量对比：这才是 CNN 的价值
+
+```
+CNN（这个例子）: 3×3 的核 = 9 个参数，与图片大小无关
+               图变成 500×500，参数量还是 9
+
+全连接:          5×5 输入 → 25 维输出 = 25×25+25 = 650 个参数
+               图变成 500×500 → 250000 × 25 ≈ 625 万
+```
+
+**权值共享是"参数与图片大小无关"的全部原因**：同一个核（同一组参数）用在了图片的每一个位置上。
+
+### 术语精确化：padding 和 stride
+
+上面是无填充、步长 1 的情况。两个关键参数：
+
+| 参数 | 含义 | 效果 |
+|---|---|---|
+| **padding**（填充） | 在图像边缘补 0 的圈数 | 控制输出尺寸。`pad=1` 时 `8-3+2+1 = 8`，**尺寸不变** |
+| **stride**（步长） | 核每次移动几格 | `stride=2` 时输出尺寸大约减半 |
+
+加上它们之后的通用公式：
+
+```
+输出边长 = (输入 + 2×padding - 核) / stride + 1
+```
+
+验证：`(8 + 2×1 - 3)/1 + 1 = 8` ✓（上一篇 conv1 保持 8×8 的原因）
+验证：`(5 + 0 - 3)/1 + 1 = 3` ✓（本文例子）
+
+**为什么需要 padding？** 如果一直不填充，每过一层尺寸就减小 2，几层之后图就没了；而且边缘像素被卷到的次数远少于中心像素（中心会被覆盖 9 次，角落只有 1 次），**边缘信息被浪费**。补零让边缘也能被充分利用。
+
+---
+
+## 3. 多通道：输出通道数就是卷积核的个数
+
+上面是单通道（灰度图）。真实图片是 RGB 三通道，而且**卷积层的输出通常也是多通道**。
+
+上一篇 CNN 里写的是 `nn.Conv2d(1, 16, kernel_size=3, padding=1)`，这一篇是 `nn.Conv2d(1, 32, ...)`。**参数的含义是 `(输入通道, 输出通道, 核大小)`**。
+
+```
+输入 (1, 8, 8)  ──►  Conv2d(1, 32, k=3, pad=1)  ──►  输出 (32, 8, 8)
+     1 个通道              32 个卷积核                   32 个通道
+```
+
+**关键规则**：
+
+1. **输出通道数 = 卷积核的个数**。要 32 个通道，就准备 32 个不同的核
+2. **每个核都要跨过输入的"所有"通道**。输入是 3 通道时，一个 3×3 的核实际形状是 `3×3×3`；输入是 32 通道时，一个核是 `32×3×3`
+3. **每个输出通道 = 对应的那个核在所有输入通道上算完再求和 + 一个偏置**
+
+这解释了参数量公式：
+
+```
+卷积层参数 = 输入通道 × 输出通道 × 核高 × 核宽 + 输出通道
+             └────────── 一个核的大小 ──────────┘   └─ 偏置 ─┘
+```
+
+**另一个角度的理解**：每个输出通道是一种"**特征图**"（feature map）——它记录的是"整张图上哪些位置出现了第 k 种特征"。通道数越多，能同时检测的特征种类越多。
+
+**这就是"层次化特征提取"的物理基础**：
+
+```
+浅层通道:  边缘、颜色块、简单纹理         （看的是像素级局部模式）
+中层通道:  眼睛、轮子、文字笔画           （把边缘组合成部件）
+深层通道:  猫脸、整辆车                    （把部件组合成语义对象）
+```
+
+**层数越深，感受野越大，能"看到"的范围越大**，所以能从局部模式一路组合到全局语义。
+
+---
+
+## 4. 池化：降维，而且是"有损但有用"的降维
+
+代码第 2 节把 4×4 的矩阵喂给两种池化：
+
+```
+输入 4x4:
+[[ 1  2  3  4]
+ [ 5  6  7  8]
+ [ 9 10 11 12]
+ [13 14 15 16]]
+
+MaxPool 2x2 (每块取最大):      AvgPool 2x2 (每块取平均):
+[[ 6  8]                        [[ 4  6]
+ [14 16]]                        [12 14]]
+```
+
+**计算方式**：把 4×4 分成 4 个不重叠的 2×2 块，每块出一个数。
+
+```
+MaxPool 的左上块:  [1 2]   → 最大值 6
+                  [5 6]
+
+AvgPool 的左上块:  [1 2]   → 平均 (1+2+5+6)/4 = 3.5 → 显示为 4（四舍五入）
+                  [5 6]
+```
+
+**池化层没有参数**——它只做固定的聚合运算（取最大/取平均），没有任何要学的东西。对照代码输出那句总结：`池化没有参数, 只做降维: 4x4 -> 2x2`。
+
+### 池化解决了什么
+
+**① 减少计算量和内存**：尺寸减半意味着后续层的计算量减少到 1/4。堆几个池化层，特征图会快速缩小，最后接全连接层时才不会参数爆炸。
+
+**② 提供一定的平移不变性**（MaxPool 的主要动机）：
+
+```
+特征图 A:  [0 0 0]        特征图 B:  [0 0 0]
+           [0 9 0]                   [0 0 9]      ← 同一个特征，位置偏了一格
+           [0 0 0]                   [0 0 0]
+              ↓                          ↓
+MaxPool 2x2 后两块都得到 9 → 输出相同
+```
+
+**一个特征在附近移动一小段距离，池化后结果不变**。而现实中同一个物体在图片里稍微偏一点，我们仍希望模型认得出来。MaxPool 保留了"这个区域里有没有这个特征"，丢掉了"精确在哪"。
+
+**代价是丢失空间精度**——这对分类任务无所谓（只要知道有没有），但对**目标检测、分割**这种需要精确定位的任务是致命的，所以那些任务常用 stride 卷积代替池化。
+
+**③ Max 还是 Avg？** MaxPool 保留了最强响应（"这个特征出现了吗"），最常用；AvgPool 保留整体强度，有时用在网络末端。
+
+---
+
+## 5. 感受野：为什么"堆小核"比"用大核"好
+
+**感受野（Receptive Field）** = 输出上的一个点，**对应输入图中的多大区域**。
+
+```
+一层 3×3 卷积:  输出1个点 ← 看到输入的 3×3 区域    → 感受野 3×3
+两层 3×3 卷积:  输出1个点 ← 看到输入的 5×5 区域    → 感受野 5×5
+三层 3×3 卷积:                                      → 感受野 7×7
+```
+
+推法：第二层的 3×3 区域里，每个点又各自"看到"第一层的 3×3，所以合起来是 5×5（重叠部分算一次）。
+
+**关键结论：两个 3×3 堆叠 ≈ 一个 5×5 的感受野，但更划算。**
+
+| 方案 | 参数量 | 非线性次数 |
+|---|---|---|
+| 一个 5×5 卷积核 | `5×5 = 25` | 1 次 |
+| 两个 3×3 卷积核 | `2 × (3×3) = 18` | **2 次** |
+
+参数少了 28%，而且**多了一层非线性**（每层卷积后都有 ReLU）——表达能力更强。**这就是 VGGNet 全用 3×3 小核的核心论证**（见第 8 节）。
+
+**感受野的意义**：网络必须"看得足够广"才能判断语义。判断"这是一只猫"需要综合耳朵、眼睛、胡须的相对位置，如果感受野只有 3×3，每个神经元只能看到 9 个像素，无从判断。所以深层网络 + 池化不断放大感受野，最后全连接层才能做出全局判断。
+
+---
+
+## 6. BatchNorm：让每层的输入分布别乱跑
+
+本篇的 CNN 比上一篇多了一个东西：
+
+```python
+self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+self.bn1 = nn.BatchNorm2d(32)         # ← 新增
+```
+
+### 它做什么
+
+$$y = \frac{x - \mu}{\sigma} \cdot \gamma + \beta$$
+
+| 部分 | 作用 |
+|---|---|
+| `(x - μ)/σ` | **标准化**：把这一层的输出强行拉成均值 0、方差 1 |
+| `γ, β` | **可学习的**缩放和平移参数 |
+
+**`BatchNorm2d(32)` 里的 32 是通道数**——它**对每个通道单独**做标准化。输入是 `(N, 32, H, W)` 时，对第 c 个通道，会在 `N×H×W` 个数值上算均值和方差。
+
+### 后半句 `· γ + β` 为什么不能省
+
+这是个很容易被忽略的关键点。如果**只**做标准化，等于强行假设"每层的输入都该是均值 0、方差 1"——但网络本来可能需要某种特定的分布（比如 Sigmoid 想工作在非线性区）。强行拉平反而**限制了表达能力**。
+
+所以加 `γ, β` 让它**自己学回来**该有的分布：如果网络觉得标准化没必要，它可以把 `γ=σ`、`β=μ`，等于把标准化撤销了。**引入了约束，但把是否使用这个约束的决定权交给了训练。**
+
+### 为什么有用
+
+核心作用是**稳定每一层输入的分布**。没有 BN 时，前面层的参数一更新，后面层收到的输入分布就跟着变，后面层得不停地"重新适应"（论文里叫内部协变量偏移）。
+
+BN 之后，无论前面怎么变，后面层收到的总是**标准化过的稳定分布**，于是：
+
+- **可以用更大的学习率**（分布稳定，不容易震荡）
+- **收敛更快**（本篇 CNN 在 3 个 epoch 就到 98%，上一篇没有 BN 的网络 10 个 epoch 才 92.78%）
+- **有一点正则化效果**，因为每个 batch 的均值方差都不同，引入了噪声
+- **缓解梯度消失**（回顾 [2_neural_network.md](2_neural_network.md) 第 10 节：把激活值拉回导数健康的区间）
+
+### 一个必须记住的坑
+
+BN 的均值和方差来源**在训练和推理时不同**（回到上一篇第 6.4 节）：
+
+| 模式 | 均值/方差从哪来 |
+|---|---|
+| 训练 `model.train()` | **当前 batch** 的统计量，同时更新一个全局滑动平均 |
+| 推理 `model.eval()` | 用训练期累积的**滑动平均**，不看当前 batch |
+
+**所以推理前必须 `model.eval()`**。忘了写的话，预测结果会依赖"当前这批里恰好有什么数据"，同一张图在不同 batch 里可能得到不同结果。这是 BN 相关的经典 bug。
+
+---
+
+## 7. 完整 CNN 结构与参数量验证
 
 ```python
 class CNN(nn.Module):
-    def __init__(self, num_classes=2):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
+    """Conv -> BN -> ReLU -> Pool 堆叠, 最后全连接分类"""
+
+    def __init__(self, num_classes=10):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.bn1 = nn.BatchNorm2d(32)   # BatchNorm 稳定训练
-        self.fc1 = nn.Linear(256 * 14 * 14, 512)
-        self.fc2 = nn.Linear(512, num_classes)
-        self.dropout = nn.Dropout(0.5)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(2)
+        self.dropout = nn.Dropout(0.25)
+        self.fc1 = nn.Linear(64 * 2 * 2, 128)
+        self.fc2 = nn.Linear(128, num_classes)
 
     def forward(self, x):
-        # 4个卷积块: 224 -> 112 -> 56 -> 28 -> 14
+        # 8x8 -> conv(padding=1) -> 8x8 -> pool -> 4x4
         x = self.pool(torch.relu(self.bn1(self.conv1(x))))
-        ...
-        x = x.view(-1, 256 * 14 * 14)   # 展平
+        # 4x4 -> conv(padding=1) -> 4x4 -> pool -> 2x2
+        x = self.pool(torch.relu(self.bn2(self.conv2(x))))
+        x = torch.flatten(x, 1)
         x = self.dropout(torch.relu(self.fc1(x)))
-        x = self.fc2(x)
-        return x
+        return self.fc2(x)
 ```
 
-## 训练模型
+### 形状推演
+
+**注意 `forward` 里嵌套调用的顺序：从里往外读**。`self.pool(torch.relu(self.bn1(self.conv1(x))))` 的实际执行顺序是：
+
+```
+conv1 → bn1 → relu → pool
+```
+
+（因为最内层的 `conv1(x)` 先算，结果传给 `bn1`，再传给 `relu`，最后 `pool`。）
+
+| 步骤 | 形状 | 变化原因 |
+|---|---|---|
+| 输入 | (N, 1, 8, 8) | 单通道灰度图 |
+| `conv1(1→32, k=3, pad=1)` | (N, **32**, 8, 8) | 通道 1→32；`pad=1` 保持尺寸 |
+| `bn1` | (N, 32, 8, 8) | 逐通道标准化，**形状不变** |
+| `relu` | (N, 32, 8, 8) | 逐元素，形状不变 |
+| `pool(2)` | (N, 32, **4**, **4**) | 尺寸减半，**通道不变** |
+| `conv2(32→64, k=3, pad=1)` | (N, **64**, 4, 4) | 通道 32→64 |
+| `bn2` + `relu` | (N, 64, 4, 4) | 形状不变 |
+| `pool(2)` | (N, 64, **2**, **2**) | 尺寸再减半 |
+| `flatten(x, 1)` | (N, **256**) | `64×2×2 = 256` |
+| `fc1(256→128)` | (N, 128) | |
+| `dropout` | (N, 128) | 形状不变 |
+| `fc2(128→10)` | (N, **10**) | 输出 10 类得分 |
+
+### 参数量手算（对照真实的 53,194）
+
+```
+conv1:  Conv2d(1→32, 3×3)      1 × 32 × 3 × 3 + 32   =   288 + 32 =   320
+bn1:    BatchNorm2d(32)        32 × 2（γ 和 β）      =            64
+conv2:  Conv2d(32→64, 3×3)     32 × 64 × 3 × 3 + 64  = 18432 + 64 = 18,496
+bn2:    BatchNorm2d(64)        64 × 2                =           128
+fc1:    Linear(256→128)        256 × 128 + 128       = 32768+128 = 32,896
+fc2:    Linear(128→10)         128 × 10 + 10         = 1280 + 10 =  1,290
+pool / flatten / dropout:                            =             0
+──────────────────────────────────────────────────────────────────────────
+合计                                                              53,194   ✓
+```
+
+真实输出 `参数量: 53,194`——**完全吻合**。
+
+**几个值得注意的点**：
+
+1. **BatchNorm 也有参数**（`γ` 和 `β` 各一个向量，所以是 `通道数 × 2`），很多人以为 BN 无参数。
+2. **`fc1` 独占了 62% 的参数**（32,896 / 53,194）。这是全连接层的典型特征——**参数量都堆在最后几层**。这也是为什么 ResNet 之类的现代架构干脆用 `GlobalAveragePooling` 取代全连接层，把这块参数干掉。
+3. **卷积层参数很少**（conv1 只有 320 个），印证了第 2 节的"权值共享"结论。
+4. **`num_classes` 作为参数传入**而不是写死 10——这样改成猫狗二分类时只需 `CNN(num_classes=2)`，不用改类内部代码。**这是好的工程习惯**。
+
+---
+
+## 8. 经典架构：每一次突破解决了什么问题
+
+| 架构 | 年份 | 解决的核心问题 | 关键创新 |
+|---|---|---|---|
+| **LeNet-5** | 1998 | 证明 CNN 可用于手写数字识别 | 第一个 CNN，Conv-Pool-FC 的基本范式 |
+| **AlexNet** | 2012 | 深层网络训练困难、过拟合 | 用 **ReLU** 替代 Sigmoid（缓解梯度消失）、**Dropout**、GPU 训练，ImageNet 错误率从 26% 降到 16% |
+| **VGGNet** | 2014 | 网络该多深、用什么核 | 全部用 **3×3 小核堆叠**（第 5 节的论证），证明"深度很重要" |
+| **ResNet** | 2015 | **深层网络退化**（56 层反而比 20 层差） | **残差连接 `y = F(x) + x`**，训到 152 层 |
+| **EfficientNet** | 2019 | 深度/宽度/分辨率该按什么比例放大 | **复合缩放**：三者按固定比例一起扩大，用更少的参数达到更好效果 |
+
+**ResNet 解决的问题值得单独说**：按直觉，层数越多表达能力越强，应该越好。但实验发现 56 层反而不如 20 层。原因不是过拟合，而是**梯度无法有效地传回浅层**（回顾 [2_neural_network.md](2_neural_network.md) 第 10 节）。
+
+残差连接 `y = F(x) + x` 的巧妙之处：反向传播时 `∂y/∂x = ∂F/∂x + 1`，**那个 `+1` 保证了梯度至少能以原值传回去**，不会被连乘衰减到 0。因此网络可以很深。
+
+---
+
+## 9. 训练：学习率调度器
 
 ```python
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, mode='min', factor=0.5, patience=2
-)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2)
+```
 
-def train_epoch(model, loader, criterion, optimizer):
-    model.train()          # 训练模式
-    for inputs, labels in loader:
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+`ReduceLROnPlateau` 的含义是"**平台期自动降低学习率**"：
 
-def validate(model, loader, criterion):
-    model.eval()           # 评估模式
-    with torch.no_grad(): # 不计算梯度
+| 参数 | 含义 |
+|---|---|
+| `mode="min"` | 监控的指标越小越好（这里是 loss） |
+| `factor=0.5` | 触发时把学习率**乘以 0.5** |
+| `patience=2` | 容忍 **2 个 epoch** 没有改善 |
+
+配合的调用在训练循环里：
+
+```python
+scheduler.step(val_loss)              # 验证损失不降时自动降低学习率
+```
+
+**为什么需要它？** 回顾 [2_neural_network.md](2_neural_network.md) 第 8.1 节：学习率是固定值时，训练后期会在最优解附近**震荡**（步子太大，一步跨过谷底）。调度器的思路是**先大步快走，后小步微调**——前期 lr=0.001 快速下降，后期自动减半再减半，让模型能精细收敛。
+
+**注意它和上一篇 Keras 的 `ReduceLROnPlateau` 回调是同一个东西**，只是 PyTorch 需要手动 `step()`，Keras 自动触发。
+
+**训练和验证的封装**：
+
+```python
+def run_epoch(loader, train=True):
+    if train:
+        model.train()
+    else:
+        model.eval()
+
+    total_loss = correct = total = 0
+    with torch.set_grad_enabled(train):         # ← 关键
         for inputs, labels in loader:
+            if train:
+                optimizer.zero_grad()
             outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            if train:
+                loss.backward()
+                optimizer.step()
             ...
-
-# 训练循环 + 保存最佳模型
-for epoch in range(num_epochs):
-    train_loss, train_acc = train_epoch(...)
-    val_loss, val_acc = validate(...)
-    scheduler.step(val_loss)
-
-    if val_acc > best_val_acc:
-        best_val_acc = val_acc
-        torch.save(model.state_dict(), 'best_model.pth')
 ```
 
-要点：`model.train()` / `model.eval()` 切换模式，验证时 `torch.no_grad()`。
+**`torch.set_grad_enabled(train)` 是个很漂亮的写法**：`train=True` 时等价于默认状态（开梯度），`train=False` 时等价于 `torch.no_grad()`。**一个函数同时服务训练和评估**，不用写两遍。
 
-## 迁移学习
+三段 `if train:` 分别控制**清零、反向、更新**——这也说明这三步是"训练独有"的，评估时全都不需要。
 
-数据不多时，用预训练模型效果远好于从头训练：
+对比上一篇 PyTorch 示例，这里没有 `running_loss += loss.item()`，而是 `total_loss += loss.item()`，作用是同样的（累加后除以 batch 数取平均）。
 
-```python
-model = models.efficientnet_b0(pretrained=True)
+---
 
-# 冻结前面层
-for param in model.features[:-1].parameters():
-    param.requires_grad = False
+## 10. 真实训练日志怎么读
 
-# 修改分类头
-num_features = model.classifier[1].in_features
-model.classifier = nn.Sequential(
-    nn.Dropout(0.2),
-    nn.Linear(num_features, 256),
-    nn.ReLU(),
-    nn.Dropout(0.3),
-    nn.Linear(256, 2)
-)
+```
+  epoch  1: Train Loss 1.518 Acc 61.93% | Val Loss 1.457 Acc 88.61%
+  epoch  3: Train Loss 0.214 Acc 95.20% | Val Loss 0.130 Acc 98.06%
+  epoch  5: Train Loss 0.087 Acc 97.91% | Val Loss 0.078 Acc 97.50%
+  epoch 10: Train Loss 0.017 Acc 99.93% | Val Loss 0.031 Acc 98.61%
 ```
 
-训练技巧：先冻结训练几轮 → 解冻微调 → 用小学习率 (如 1e-4)。
+**几个值得注意的现象**：
 
-## 模型评估
+1. **epoch 1 的 val (88.61%) 明显高于 train (61.93%)**：和上一篇 Keras 是同一个原因——`train` 是这个 epoch 内的**平均值**，而 `val` 是**结束后**用最终参数算的。模型在 epoch 内一直在变强，所以用最终参数算的 val 更好看。
+
+2. **epoch 1→3 的巨大跃升（61.93% → 95.20%）**：BN + Adam 的组合让收敛非常快。
+
+3. **epoch 3 出现 val (98.06%) > train (95.20%)**：这个方向的反常值得解释。合理的原因是 **Dropout 只在训练时生效**（`model.eval()` 时关闭）——评估时用的是"完整网络"，而训练时网络被随机削弱了 25%。所以训练准确率天然吃亏。**这类现象不一定是问题，理解机制比慌张地调参重要。**
+
+4. **到 epoch 10，train 99.93% vs val 98.61%**：差距约 1.3 个百分点，属于**轻微的过拟合**，但完全可接受。如果继续训到 100 轮，train 会趋近 100% 而 val 可能反而下降——那才需要处理（加 Dropout、加正则、早停）。
+
+5. **loss 持续下降**（1.518 → 0.017）：训练健康的首要标志。
+
+**一个实验纪律上的诚实的说明**：这份代码里，第 5 节的"验证"用的就是 `test_loader`（测试集），第 6 节又在同一个测试集上算混淆矩阵。**严格来说这是不规范的**——测试集应该只在最后用一次（回顾 [3_tensorflow_demo.md](3_tensorflow_demo.md) 第 8 节的讨论）。
+
+这里这么做是为了简化演示（数据量小、也不做多次调参，污染风险低），但你**自己写项目时要切三个集合**：训练 / 验证 / 测试。
+
+---
+
+## 11. 评估：读懂混淆矩阵
 
 ```python
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix
+cm = confusion_matrix(all_labels, all_preds)
+```
 
-model.load_state_dict(torch.load('best_model.pth'))
-model.eval()
+真实输出：
 
+```
+混淆矩阵 (行=真实, 列=预测):
+[[33  0  0  0  0  0  0  0  0  0]
+ [ 0 28  0  0  0  0  0  0  0  0]
+ [ 0  0 33  0  0  0  0  0  0  0]
+ [ 0  0  0 33  0  1  0  0  0  0]
+ [ 0  0  0  0 46  0  0  0  0  0]
+ [ 0  0  0  0  0 46  0  0  0  1]
+ [ 0  0  0  0  0  0 35  0  0  0]
+ [ 0  0  0  0  0  0  0 33  0  1]
+ [ 0  2  0  0  0  0  0  0 28  0]
+ [ 0  0  0  0  0  0  0  0  0 40]]
+
+准确率: 98.61%
+```
+
+### 怎么读
+
+**行 = 真实标签，列 = 预测结果**（第 0 行第 0 列 = "真实是 0 且预测是 0"的样本数）。
+
+**对角线 = 预测正确的数量**：
+
+```
+33 + 28 + 33 + 33 + 46 + 46 + 35 + 33 + 28 + 40 = 355
+```
+
+**对角线之外的数字 = 错误**，全部加起来是 **5** 个：
+
+```
+355 / 360 = 98.61%   ✓ 与输出的准确率一致
+```
+
+### 比准确率有用得多的地方
+
+**准确率只是一个数字，混淆矩阵告诉你"错在哪里"。** 逐条看这 5 个错误：
+
+| 位置 | 真实 | 预测成 | 数量 |
+|---|---|---|---|
+| 第 3 行 | 3 | 5 | 1 |
+| 第 5 行 | 5 | 9 | 1 |
+| 第 7 行 | 7 | 9 | 1 |
+| 第 8 行 | 8 | 1 | 2 |
+
+**这 5 个错误全都是有道理的——误判都发生在"形状相似"的数字之间**：3↔5、5↔9、7↔9、8↔1，这些确实是手写时最容易混淆的组合。
+
+**这是模型真的学到了"形状"的有力证据**，而不是背下了训练样本。如果是数据泄露或死记硬背，误判分布应该是随机的（比如 0 被判成 7 这种毫不相干的错误也会经常出现）。
+
+**实用推论**：如果这是真实业务，你就能有针对性地改进——既然 8 和 1 混淆最多，就去收集更多这两类的边界样本，而不必盲目增加数据量。
+
+**为什么不用准确率就够了？** 因为**数据不平衡时准确率会骗人**：如果 99% 的样本都是类别 0，一个"永远输出 0"的模型准确率也是 99%，但毫无用处。混淆矩阵会立刻暴露这个问题（所有错都集中在一列）。所以做分类任务，**先看混淆矩阵再看准确率**。
+
+---
+
+## 12. 预测单张图片
+
+```python
+idx = 0
+img = torch.from_numpy(X_test[idx]).unsqueeze(0).unsqueeze(0)   # (1, 1, 8, 8)
 with torch.no_grad():
-    for inputs, labels in val_loader:
-        outputs = model(inputs)
-        _, predicted = outputs.max(1)
-        ...
-
-cm = confusion_matrix(all_labels, all_preds)   # 混淆矩阵
-print(classification_report(all_labels, all_preds,
-                            target_names=['Cat', 'Dog']))
+    probs = torch.softmax(model(img), dim=1)[0]
+pred = probs.argmax().item()
 ```
 
-## 预测新图像
+真实输出：
 
-```python
-from PIL import Image
-
-def predict_image(image_path, model):
-    model.eval()
-    img = Image.open(image_path).convert('RGB')
-    img_tensor = transform(img).unsqueeze(0)   # 加 batch 维度
-
-    with torch.no_grad():
-        output = model(img_tensor)
-        prob = torch.softmax(output, dim=1)
-        pred = output.argmax(1)
-
-    classes = ['Cat', 'Dog']
-    return classes[pred.item()], prob[0][pred.item()].item()
-
-class_name, confidence = predict_image('test.jpg', model)
-print(f'预测: {class_name}, 置信度: {confidence:.2%}')
+```
+真实标签: 6
+预测结果: 6, 置信度: 99.74%
 ```
 
-## 部署为Web服务
+**两个 `unsqueeze` 在干什么？** 单张图从数据集取出来是 `(8, 8)`，但模型要求四维 `(N, C, H, W)`：
+
+```
+(8, 8)                    ← 原始单张图
+  ↓ unsqueeze(0)          ← 补通道维
+(1, 8, 8)                 ← 1 个通道
+  ↓ unsqueeze(0) 或 .unsqueeze(0) 等价于 [None]
+(1, 1, 8, 8)              ← batch=1, 通道=1
+```
+
+**为什么必须有 batch 维？** 因为模型是按 batch 设计的（`nn.BatchNorm2d`、`flatten(x, 1)` 都假设第 0 维是 batch）。**即使只有一张图，也要伪装成"一批只有 1 张"**。这是推理时最常见的形状错误来源。
+
+**`torch.softmax(model(img), dim=1)` 为什么还要再 softmax 一次？** 因为 `model` 输出的最后是 `fc2`，**没有接 softmax**（`return self.fc2(x)`）——输出的是 10 个原始得分（logits），不是概率。所以要手动过一次 softmax 才能得到"概率"。
+
+> 顺带说明：训练时用的 `nn.CrossEntropyLoss` **内部已经包含了 softmax**，所以模型输出 logits 是正确做法（数值上更稳定）。如果模型输出层自己加了 softmax，再接 `CrossEntropyLoss` 就等于做了两次，是常见错误。
+
+**`[0]` 的作用**：`softmax` 输出形状是 `(1, 10)`，`[0]` 取第 0 个（也就是唯一那张图）的 10 维概率向量。
+
+**99.74% 的置信度说明什么？** 模型非常确定。但要记住**高置信度不等于正确**——过拟合的模型也会对错误答案给出 99% 的置信度。所以置信度只能作为参考，不能当作正确性的保证（真实业务里通常需要置信度阈值 + 人工兜底）。
+
+---
+
+## 13. 真实照片项目：猫狗分类
+
+前面用的是 8×8 的 digits。真实项目（比如 Kaggle Dogs vs Cats）多了几件事：**数据在磁盘上、图片尺寸大、数据量小**。
+
+### 数据管道：ImageFolder + 数据增强
 
 ```python
+from torchvision import datasets, transforms
+
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.RandomHorizontalFlip(),          # 数据增强
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+])
+
+# 目录结构: data/train/cat/*.jpg, data/train/dog/*.jpg
+train_data = datasets.ImageFolder('data/train', transform=transform)
+train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+```
+
+**`ImageFolder` 的要求**：目录结构必须是"**一个类别一个文件夹**"：
+
+```
+data/train/
+├── cat/
+│   ├── 001.jpg
+│   └── ...
+└── dog/
+    ├── 002.jpg
+    └── ...
+```
+
+它**自动按文件夹名生成标签**（cat→0, dog→1），省去手写标签的麻烦。这是 torchvision 的惯例，真实项目普遍遵循。
+
+**`transforms.Compose` 是流水线**，按顺序执行每一步：
+
+| 变换 | 作用 | 为什么 |
+|---|---|---|
+| `Resize((224,224))` | 统一尺寸 | 网络要求固定输入尺寸 |
+| `RandomHorizontalFlip()` | 随机水平翻转 | **数据增强**：猫翻转后还是猫，等于免费扩数据 |
+| `ToTensor()` | 转成张量并归一化到 0~1 | PIL 图片 → torch 张量，同时把 HWC 换成 CHW |
+| `Normalize(mean, std)` | 按 ImageNet 统计量标准化 | **使用预训练模型时必须匹配**，见下 |
+
+**那三个奇怪的小数 `[0.485, 0.456, 0.406]` 是什么？** 是 ImageNet 数据集在 RGB 三个通道上的**均值和标准差**（统计出来的经验值）。
+
+**为什么必须用这组数？** 因为预训练模型的权重是在"按这套参数标准化过的输入"上训练的。你如果用自己的均值方差，输入分布就和模型预期的不一致，**预训练知识会失效**。这是个很容易忽略、但影响巨大的细节——**用预训练模型，就复刻它的预处理**。
+
+**注意：验证集不做增强**（只 Resize + ToTensor + Normalize）。因为评估需要**确定性**——同一张图每次评估结果必须一致，随机翻转会引入噪声。数据增强只用于训练。
+
+### 迁移学习
+
+```python
+model = models.efficientnet_b0(weights='DEFAULT')
+for p in model.features.parameters():
+    p.requires_grad = False                     # 冻结主干
+model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
+optimizer = optim.Adam(model.parameters(), lr=1e-4)
+```
+
+**为什么小数据集必须用迁移学习？** 猫狗数据集只有几千张图，从头训练一个 CNN 会严重过拟合（几百万参数去拟合几千个样本）。而 ImageNet 预训练模型见过 1400 万张图，**它的浅层已经会提取边缘、纹理、毛发等通用特征**，你只需教它最后一层"怎么把这些特征组合成猫/狗的判断"。
+
+**关键点**（和上一篇 PyTorch 的迁移学习完全一致）：
+
+| 操作 | 作用 |
+|---|---|
+| `weights='DEFAULT'` | 加载 ImageNet 预训练权重（**`pretrained=True` 是已弃用的旧写法**） |
+| `requires_grad = False` | 冻结主干，防止小数据集把预训练知识冲垮 |
+| `classifier[1].in_features` | **自动读出原分类头的输入维度**，比手写数字可靠 |
+| `lr=1e-4` | 微调要用小学习率，否则会破坏已学好的权重 |
+
+**训练策略**：先冻结训练几轮（只让新分类头学会"选址"）→ 再解冻部分层用小学习率微调。
+
+> 需要注意：首次运行会联网下载预训练权重（约 10~20MB）。
+
+---
+
+## 14. 完整流程与下一步
+
+**本项目的完整流程**：
+
+```
+数据准备            → 归一化、转张量、加通道维
+    ↓
+构建模型            → Conv-BN-ReLU-Pool 堆叠 + 全连接分类
+    ↓
+训练                → 前向/反向/更新 + 学习率调度
+    ↓
+评估                → 混淆矩阵（比对准确率信息量大得多）
+    ↓
+预测新图片          → 补 batch 维、softmax 转概率
+    ↓
+（可选）部署上线     → Flask/FastAPI 包一层，或 TorchScript 优化
+```
+
+**这个流程对所有图像任务都是通用的**，换数据集、换网络结构，骨架不变。
+
+**部署的两种方式**：
+
+```python
+# 方式1: Web 服务
 from flask import Flask, request, jsonify
-
 app = Flask(__name__)
 
 @app.route('/predict', methods=['POST'])
@@ -221,17 +713,28 @@ def predict():
     # 预处理 → 预测 → 返回 JSON
     return jsonify({'class': classes[pred], 'confidence': float(prob)})
 
-# 或使用 TorchScript 优化
+# 方式2: TorchScript — 把模型编译成可脱离 Python 的格式
 scripted_model = torch.jit.trace(model, example_input)
 scripted_model.save('model_scripted.pt')
 ```
 
-## 项目总结
+**为什么需要 TorchScript？** 普通 PyTorch 模型依赖 Python 运行时，**线上服务用 C++ 部署时无法加载**。`torch.jit.trace` 通过喂一个样例输入、记录实际执行的计算路径，把模型编译成独立于 Python 的格式。
 
-完整流程：数据收集 → 数据划分 → 数据增强 → 构建模型 → 训练（GPU、早停）→ 评估（混淆矩阵、分类报告）→ 预测部署。
+**下一步方向**：
 
-下一步可以尝试：目标检测 (YOLO、Faster R-CNN)、语义分割 (U-Net、DeepLab)、图像生成 (GAN、Diffusion)、模型量化部署到移动端。
+| 方向 | 代表技术 | 与本文的关系 |
+|---|---|---|
+| 目标检测（框出物体） | YOLO、Faster R-CNN | **池化丢失空间精度**，检测需要定位，所以改用 stride 卷积 |
+| 语义分割（逐像素分类） | U-Net、DeepLab | 需要"缩小再放大"的结构 |
+| 图像生成 | GAN、Diffusion | 从随机噪声生成图像 |
+| 模型压缩 | 量化、剪枝、蒸馏 | 把模型变小以部署到移动端 |
+
+**想进一步练习**：把本文的 CNN 换成 `nn.Conv2d(1, 32, ...)` 后接**3 层卷积**，看准确率能否提升；再用第 11 节的混淆矩阵确认误判是否仍然集中在形状相似的数字上。
 
 ## 代码
 
-讲解对应的示例代码见 `5_cnn_image_classification.py`。
+讲解对应的示例代码见 `5_cnn_image_classification.py`，可直接运行。
+
+代码用 sklearn 自带的 digits 数据集（8×8 手写数字）端到端跑通 CNN 全流程：手算卷积、池化降维、训练、评估（混淆矩阵）、预测单张图，验证集准确率 **98.61%**（355/360 正确，5 个错误全部是形状相似数字之间的混淆）。
+
+真实猫狗照片项目（ImageFolder + 迁移学习）的写法见代码第 8 节，需要 Kaggle 数据集。

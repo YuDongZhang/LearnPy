@@ -2,29 +2,28 @@
 
 ## 项目概述
 
-项目目标：根据房屋特征预测房价。
+项目目标：根据房屋特征预测社区房价中位数。
 
-数据特征（波士顿房价数据集）：
+使用数据集：加州房价 (California Housing)：
 
-- 房间数量 (RM)
-- 犯罪率 (CRIM)
-- 房屋年龄 (AGE)
-- 距离就业中心距离 (DIS)
-- 税率 (TAX)
+- 20640 个社区样本，8 个特征
+- 特征包括：收入中位数 (MedInc)、房龄 (HouseAge)、平均房间数 (AveRooms)、经纬度等
+- 目标值单位：10万美元
+
+> 注：老教材常用的 `load_boston`（波士顿房价）已在 sklearn 1.2 中移除（伦理争议），官方推荐 `fetch_california_housing` 作为替代。首次运行会自动下载数据（约400KB），之后使用本地缓存。
 
 这是机器学习的经典回归问题，综合运用数据处理和模型训练。
 
 ## 加载数据
 
 ```python
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
+import numpy as np
 import pandas as pd
 
-boston = load_boston()
-X, y = boston.data, boston.target
-
-df = pd.DataFrame(X, columns=boston.feature_names)
-df['PRICE'] = y
+housing = fetch_california_housing()
+X = pd.DataFrame(housing.data, columns=housing.feature_names)
+y = pd.Series(housing.target, name='PRICE')  # 单位: 10万美元
 print(f"数据集形状: {X.shape}")
 ```
 
@@ -100,18 +99,16 @@ print(f"最佳模型: {best_model_name}")
 ## 预测新数据
 
 ```python
-new_house = pd.DataFrame({
-    'RM': [5],      # 5个房间
-    'CRIM': [0.1],  # 低犯罪率
-    'AGE': [30],    # 30年房龄
-    'DIS': [4],     # 距离就业中心4km
-    'TAX': [300]    # 税率
-})
+# 构造一套"典型房子": 用训练集中位数作为基准, 再调高社区收入
+new_house = X_train.median().to_frame().T
+new_house['MedInc'] = 6.0  # 收入中位数 6 万美元 (高于整体中位数)
 
 new_house_scaled = scaler.transform(new_house)
 predicted_price = best_model.predict(new_house_scaled)[0]
-print(f"预测房价: ${predicted_price * 1000:.2f}")
+print(f"预测房价: ${predicted_price * 100000:,.0f}")
 ```
+
+还可以做对比实验：把 MedInc 调低到 2.0，预测房价明显下降，验证了收入是决定房价的关键因素。
 
 ## 模型解释
 
@@ -128,6 +125,8 @@ importance = pd.DataFrame({
 - 系数 > 0：该特征增加，房价增加
 - 系数 < 0：该特征增加，房价降低
 - |系数| 越大，影响越大
+
+实际运行中，MedInc（社区收入）在回归系数和随机森林重要性中都是第一关键特征；纬度/经度系数为负，说明加州北部房价相对较低。
 
 ## 项目总结
 
